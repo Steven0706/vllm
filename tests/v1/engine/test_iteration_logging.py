@@ -4,6 +4,8 @@
 import time
 from types import SimpleNamespace
 
+import pytest
+
 from vllm.v1.engine import EngineCoreOutputs
 from vllm.v1.engine.core import EngineCore
 from vllm.v1.metrics.stats import SchedulerIterationDetails, SchedulerStats
@@ -32,7 +34,7 @@ def make_fake_engine(log_stats: bool = True) -> SimpleNamespace:
         log_stats=log_stats,
         vllm_config=SimpleNamespace(
             observability_config=SimpleNamespace(
-                enable_logging_iteration_details=True,
+                collect_iteration_details=True,
             )
         ),
     )
@@ -59,6 +61,41 @@ def test_capture_iteration_details_fills_elapsed_time():
     assert iteration_details is not None
     assert iteration_details.elapsed_ms > 0.0
     assert engine._iteration_index == 1
+
+
+def test_update_from_output_records_update_time_and_attaches():
+    iteration_details = make_iteration_details()
+    outputs = {0: EngineCoreOutputs(scheduler_stats=SchedulerStats())}
+
+    def update_from_output(scheduler_output, model_output):
+        time.sleep(0.001)
+        return outputs
+
+    engine = SimpleNamespace(
+        scheduler=SimpleNamespace(update_from_output=update_from_output),
+        _attach_iteration_details=lambda outs, details: (
+            EngineCore._attach_iteration_details(FakeEngineCore(), outs, details)
+        ),
+    )
+
+    result = EngineCore._update_from_output(engine, None, None, iteration_details)
+
+    assert result is outputs
+    assert iteration_details.update_ms > 0.0
+    assert outputs[0].scheduler_stats is not None
+    assert outputs[0].scheduler_stats.iteration_details is iteration_details
+
+
+def test_update_from_output_without_details_skips_timing():
+    outputs = {0: EngineCoreOutputs()}
+    engine = SimpleNamespace(
+        scheduler=SimpleNamespace(update_from_output=lambda so, mo: outputs),
+        _attach_iteration_details=lambda outs, details: pytest.fail(
+            "attach must not run without iteration details"
+        ),
+    )
+
+    assert EngineCore._update_from_output(engine, None, None, None) is outputs
 
 
 def test_attach_iteration_details_uses_existing_output():

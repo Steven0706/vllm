@@ -703,6 +703,7 @@ class EngineArgs:
         ObservabilityConfig, "kv_cache_metrics_sample"
     )
     cudagraph_metrics: bool = ObservabilityConfig.cudagraph_metrics
+    engine_step_metrics: bool = ObservabilityConfig.engine_step_metrics
     enable_layerwise_nvtx_tracing: bool = (
         ObservabilityConfig.enable_layerwise_nvtx_tracing
     )
@@ -1583,6 +1584,10 @@ class EngineArgs:
             **observability_kwargs["enable_logging_iteration_details"],
         )
         observability_group.add_argument(
+            "--engine-step-metrics",
+            **observability_kwargs["engine_step_metrics"],
+        )
+        observability_group.add_argument(
             "--jit-monitor-mode",
             **observability_kwargs["jit_monitor_mode"],
         )
@@ -2059,6 +2064,7 @@ class EngineArgs:
             enable_mfu_metrics=self.enable_mfu_metrics,
             enable_mm_processor_stats=self.enable_mm_processor_stats,
             enable_logging_iteration_details=self.enable_logging_iteration_details,
+            engine_step_metrics=self.engine_step_metrics,
             jit_monitor_mode=self.jit_monitor_mode,
             jit_monitor_verbose=self.jit_monitor_verbose,
         )

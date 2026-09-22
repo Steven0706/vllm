@@ -40,6 +40,8 @@ logger = init_logger(__name__)
 # User-facing reason labels for waiting request breakdown
 WAITING_REASON_CAPACITY = "capacity"
 WAITING_REASON_DEFERRED = "deferred"
+ENGINE_STEP_PHASES = ("schedule", "execute", "update")
+STEP_KINDS = ("prefill", "decode", "mixed")
 
 PerEngineStatLoggerFactory = Callable[[VllmConfig, int], "StatLoggerBase"]
 AggregateStatLoggerFactory = type["AggregateStatLoggerBase"]
@@ -476,6 +478,9 @@ class PrometheusStatLogger(AggregateStatLoggerBase):
         self.kv_cache_metrics_enabled = (
             vllm_config.observability_config.kv_cache_metrics
         )
+        self.engine_step_metrics_enabled = (
+            vllm_config.observability_config.engine_step_metrics
+        )
 
         labelnames = ["model_name", "engine"]
         model_name = vllm_config.model_config.served_model_name
@@ -748,6 +753,7 @@ class PrometheusStatLogger(AggregateStatLoggerBase):
         inter_token_latency_buckets = histogram_buckets("inter_token_latency")
         request_latency_buckets = histogram_buckets("request_latency")
         request_num_preemptions_buckets = histogram_buckets("request_num_preemptions")
+        engine_step_buckets = histogram_buckets("engine_step")
 
         #
         # Histograms of counts
@@ -924,6 +930,34 @@ class PrometheusStatLogger(AggregateStatLoggerBase):
         #
         # KV Cache residency metrics
         #
+        if self.engine_step_metrics_enabled:
+            histogram_engine_step = self._histogram_cls(
+                name="vllm:engine_step_seconds",
+                documentation=(
+                    "Host time per engine step by phase: 'schedule' = "
+                    "Scheduler.schedule(); 'execute' = from dispatching the batch "
+                    "to the model until its output is available; 'update' = "
+                    "Scheduler.update_from_output(). step_kind is 'prefill', "
+                    "'decode' or 'mixed' by the requests in the batch. "
+                    "Requires --engine-step-metrics."
+                ),
+                buckets=engine_step_buckets,
+                labelnames=labelnames + ["phase", "step_kind"],
+            )
+            self.histogram_engine_step: dict[str, dict[str, dict[int, Histogram]]] = {
+                phase: {
+                    step_kind: create_metric_per_engine(
+                        histogram_engine_step,
+                        {
+                            idx: labelvalues + [phase, step_kind]
+                            for idx, labelvalues in per_engine_labelvalues.items()
+                        },
+                    )
+                    for step_kind in STEP_KINDS
+                }
+                for phase in ENGINE_STEP_PHASES
+            }
+
         if self.kv_cache_metrics_enabled:
             kv_cache_residency_buckets = histogram_buckets("kv_cache_residency")
 
@@ -1095,6 +1129,20 @@ class PrometheusStatLogger(AggregateStatLoggerBase):
                     idle_hist.observe(event.idle_seconds)
                     for gap in event.reuse_gaps_seconds:
                         reuse_hist.observe(gap)
+
+            if (
+                self.engine_step_metrics_enabled
+                and (iteration_details := scheduler_stats.iteration_details)
+                and (step_kind := iteration_details.step_kind) is not None
+            ):
+                for phase, elapsed_ms in (
+                    ("schedule", iteration_details.schedule_ms),
+                    ("execute", iteration_details.elapsed_ms),
+                    ("update", iteration_details.update_ms),
+                ):
+                    self.histogram_engine_step[phase][step_kind][engine_idx].observe(
+                        elapsed_ms / 1000
+                    )
 
             if self.gauge_lora_info is not None:
                 running_lora_adapters = ",".join(

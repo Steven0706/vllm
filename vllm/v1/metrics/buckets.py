@@ -20,6 +20,7 @@ BucketFamilyKey = Literal[
     "request_num_preemptions",
     "request_tokens",
     "kv_cache_residency",
+    "engine_step",
 ]
 """Canonical keys for the histogram bucket families."""
 
@@ -157,6 +158,25 @@ KV_CACHE_RESIDENCY_BUCKETS: tuple[float, ...] = (
 """KV cache block residency times: millisecond-scale reuse gaps up to
 30-minute block lifetimes."""
 
+ENGINE_STEP_BUCKETS: tuple[float, ...] = (
+    0.0005,
+    0.001,
+    0.002,
+    0.005,
+    0.01,
+    0.02,
+    0.05,
+    0.1,
+    0.2,
+    0.5,
+    1.0,
+    2.0,
+    5.0,
+    10.0,
+)
+"""Per-step host phase times: sub-millisecond scheduling up to multi-second
+prefill or stalled steps."""
+
 _STATIC_FAMILY_DEFAULTS: dict[str, tuple[float, ...]] = {
     "request_latency": REQUEST_LATENCY_BUCKETS,
     "time_to_first_token": TIME_TO_FIRST_TOKEN_BUCKETS,
@@ -165,6 +185,7 @@ _STATIC_FAMILY_DEFAULTS: dict[str, tuple[float, ...]] = {
     "request_params_n": REQUEST_PARAMS_N_BUCKETS,
     "request_num_preemptions": REQUEST_NUM_PREEMPTIONS_BUCKETS,
     "kv_cache_residency": KV_CACHE_RESIDENCY_BUCKETS,
+    "engine_step": ENGINE_STEP_BUCKETS,
 }
 
 

@@ -559,9 +559,7 @@ class EngineCore:
     def capture_iteration_details(
         self, scheduler_output: SchedulerOutput | None
     ) -> Generator[SchedulerIterationDetails | None, None, None]:
-        enable_details = (
-            self.vllm_config.observability_config.enable_logging_iteration_details
-        )
+        enable_details = self.vllm_config.observability_config.collect_iteration_details
         if not self.log_stats or not enable_details:
             yield None
             return
@@ -595,6 +593,7 @@ class EngineCore:
                 num_generation_tokens=details.num_generation_tokens,
                 elapsed_ms=0.0,
                 num_encoder_inputs=details.num_encoder_inputs,
+                schedule_ms=scheduler_output.schedule_elapsed_ms or 0.0,
                 num_encoder_output_tokens=details.num_encoder_output_tokens,
             )
 
@@ -625,6 +624,20 @@ class EngineCore:
         else:
             eco.scheduler_stats.iteration_details = iteration_details
 
+    def _update_from_output(
+        self,
+        scheduler_output: SchedulerOutput,
+        model_output: ModelRunnerOutput,
+        iteration_details: SchedulerIterationDetails | None,
+    ) -> dict[int, EngineCoreOutputs]:
+        if iteration_details is None:
+            return self.scheduler.update_from_output(scheduler_output, model_output)
+        start_time = time.monotonic()
+        outputs = self.scheduler.update_from_output(scheduler_output, model_output)
+        iteration_details.update_ms = (time.monotonic() - start_time) * 1000
+        self._attach_iteration_details(outputs, iteration_details)
+        return outputs
+
     def _should_throttle_prefills(self) -> bool:
         """Whether to defer new prefills this step (DP prefill balancing).
         Overridden by the DP engine core; never throttles otherwise."""
@@ -654,10 +667,9 @@ class EngineCore:
         # Before processing the model output, process any aborts that happened
         # during the model execution.
         self._process_aborts_queue()
-        engine_core_outputs = self.scheduler.update_from_output(
-            scheduler_output, model_output
+        engine_core_outputs = self._update_from_output(
+            scheduler_output, model_output, iteration_details
         )
-        self._attach_iteration_details(engine_core_outputs, iteration_details)
 
         return engine_core_outputs, scheduler_output.total_num_scheduled_tokens > 0
 
@@ -755,10 +767,9 @@ class EngineCore:
         # Before processing the model output, process any aborts that happened
         # during the model execution.
         self._process_aborts_queue()
-        engine_core_outputs = self.scheduler.update_from_output(
-            scheduler_output, model_output
+        engine_core_outputs = self._update_from_output(
+            scheduler_output, model_output, iteration_details
         )
-        self._attach_iteration_details(engine_core_outputs, iteration_details)
 
         # NOTE(nick): We can either handle the deferred tasks here or save
         # in a field and do it immediately once step_with_batch_queue is

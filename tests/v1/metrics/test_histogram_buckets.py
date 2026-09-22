@@ -22,6 +22,22 @@ from vllm.v1.metrics.prometheus import unregister_vllm_metrics
 pytestmark = pytest.mark.cpu_test
 
 DEFAULT_BUCKET_SNAPSHOTS: dict[str, list[float]] = {
+    "engine_step": [
+        0.0005,
+        0.001,
+        0.002,
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1,
+        0.2,
+        0.5,
+        1.0,
+        2.0,
+        5.0,
+        10.0,
+    ],
     "request_latency": [
         0.3,
         0.5,
@@ -152,6 +168,7 @@ METRIC_FAMILIES: dict[str, str] = {
     "vllm:kv_block_lifetime_seconds": "kv_cache_residency",
     "vllm:kv_block_idle_before_evict_seconds": "kv_cache_residency",
     "vllm:kv_block_reuse_gap_seconds": "kv_cache_residency",
+    "vllm:engine_step_seconds": "engine_step",
 }
 
 TEST_MODEL = "distilbert/distilgpt2"
@@ -222,6 +239,7 @@ def test_bucket_family_keys():
         "request_num_preemptions",
         "request_tokens",
         "kv_cache_residency",
+        "engine_step",
     } == BUCKET_FAMILY_KEYS
     assert set(METRIC_FAMILIES.values()) == BUCKET_FAMILY_KEYS
 
@@ -257,7 +275,9 @@ def test_prometheus_logger_default_buckets():
     register its own histograms, which own their boundaries and are not
     covered by METRIC_FAMILIES.
     """
-    config = build_logger_config(ObservabilityConfig(kv_cache_metrics=True))
+    config = build_logger_config(
+        ObservabilityConfig(kv_cache_metrics=True, engine_step_metrics=True)
+    )
     assert config.model_config.max_model_len == TEST_MODEL_MAX_LEN
     try:
         PrometheusStatLogger(config)

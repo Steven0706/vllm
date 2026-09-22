@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
+import pytest
+
 from vllm.v1.core.sched.output import ScheduledEncoderInputStats, SchedulerOutput
 from vllm.v1.engine import EngineCoreOutputs, FinishReason
 from vllm.v1.metrics.stats import (
@@ -29,6 +31,8 @@ def test_scheduler_iteration_details_serialization():
         elapsed_ms=6.7,
         num_encoder_inputs=2,
         num_encoder_output_tokens=392,
+        schedule_ms=0.8,
+        update_ms=0.9,
     )
     outputs = EngineCoreOutputs(
         scheduler_stats=SchedulerStats(
@@ -43,6 +47,24 @@ def test_scheduler_iteration_details_serialization():
     assert decoded.scheduler_stats is not None
     assert decoded.scheduler_stats.kv_cache_usage == 0.5
     assert decoded.scheduler_stats.iteration_details == iteration_details
+
+
+@pytest.mark.parametrize(
+    ("num_ctx_requests", "num_generation_requests", "expected"),
+    [(2, 0, "prefill"), (0, 3, "decode"), (1, 1, "mixed"), (0, 0, None)],
+)
+def test_scheduler_iteration_details_step_kind(
+    num_ctx_requests, num_generation_requests, expected
+):
+    details = SchedulerIterationDetails(
+        iteration_index=0,
+        num_ctx_requests=num_ctx_requests,
+        num_ctx_tokens=0,
+        num_generation_requests=num_generation_requests,
+        num_generation_tokens=0,
+        elapsed_ms=0.0,
+    )
+    assert details.step_kind == expected
 
 
 def test_compute_iteration_details_includes_encoder_stats():

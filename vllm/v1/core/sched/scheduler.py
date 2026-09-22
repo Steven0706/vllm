@@ -1494,6 +1494,11 @@ class Scheduler(SchedulerInterface):
 
         with record_function_or_nullcontext("schedule: update_after_schedule"):
             self._update_after_schedule(scheduler_output)
+        if self.log_stats and self.observability_config.collect_iteration_details:
+            scheduler_output.schedule_elapsed_ms = (
+                time.monotonic() - scheduled_timestamp
+            ) * 1000
+
         return scheduler_output
 
     def _build_kv_connector_meta(

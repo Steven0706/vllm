@@ -88,6 +88,11 @@ class ObservabilityConfig:
     This includes number of context/generation requests and tokens
     and the elapsed cpu time for the iteration."""
 
+    engine_step_metrics: bool = False
+    """Export per-step engine timing as the vllm:engine_step_seconds histogram,
+    split by phase (schedule, execute, update) and step kind (prefill, decode,
+    mixed). Reads a few host clocks per step; no device work."""
+
     jit_monitor_mode: Literal["warn", "error"] = "warn"
     """How to handle post-warmup JIT compilation events."""
 
@@ -127,6 +132,11 @@ class ObservabilityConfig:
         factors: list[Any] = []
         hash_str = safe_hash(str(factors).encode(), usedforsecurity=False).hexdigest()
         return hash_str
+
+    @property
+    def collect_iteration_details(self) -> bool:
+        """Whether EngineCore records per-iteration details and timing."""
+        return self.enable_logging_iteration_details or self.engine_step_metrics
 
     @field_validator("show_hidden_metrics_for_version")
     @classmethod

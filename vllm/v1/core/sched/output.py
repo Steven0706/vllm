@@ -266,6 +266,9 @@ class SchedulerOutput:
     free_encoder_mm_hashes: list[str]
 
     scheduled_encoder_input_stats: ScheduledEncoderInputStats | None = None
+    # Host time spent in Scheduler.schedule(); only set when iteration
+    # details are collected.
+    schedule_elapsed_ms: float | None = None
 
     # Request IDs that are preempted in this step.
     # Only used for v2 model runner.

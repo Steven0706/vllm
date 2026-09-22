@@ -101,6 +101,19 @@ def test_make_scheduled_encoder_input_stats_output_embeddings():
     assert stats.output_tokens == 441
 
 
+def test_schedule_elapsed_ms_only_with_iteration_details():
+    scheduler = create_scheduler()
+    scheduler.add_request(create_requests(num_requests=1)[0])
+    assert scheduler.schedule().schedule_elapsed_ms is None
+
+    scheduler.observability_config.engine_step_metrics = True
+    elapsed_ms = scheduler.schedule().schedule_elapsed_ms
+    assert elapsed_ms is not None and elapsed_ms >= 0.0
+
+    scheduler.log_stats = False
+    assert scheduler.schedule().schedule_elapsed_ms is None
+
+
 def test_scheduled_encoder_input_stats_disabled_without_iteration_logging(
     monkeypatch: pytest.MonkeyPatch,
 ):

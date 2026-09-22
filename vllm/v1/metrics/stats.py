@@ -180,6 +180,21 @@ class SchedulerIterationDetails:
     num_encoder_inputs: int = 0
     num_encoder_output_tokens: int = 0
     is_dummy: bool = False
+    # Host time in Scheduler.schedule() and Scheduler.update_from_output();
+    # elapsed_ms covers the model execution in between.
+    schedule_ms: float = 0.0
+    update_ms: float = 0.0
+
+    @property
+    def step_kind(self) -> str | None:
+        """One of "prefill", "decode" or "mixed"; None for dummy or empty steps."""
+        if self.num_ctx_requests and self.num_generation_requests:
+            return "mixed"
+        if self.num_ctx_requests:
+            return "prefill"
+        if self.num_generation_requests:
+            return "decode"
+        return None
 
 
 @dataclass
